@@ -20,10 +20,11 @@ C:\Users\James>py -m hivecpp /f my_args.args
 
 the `my_args.args` path is reletive, so it's more like `C:\Users\James\my_args.args`
 
-then you have in your `my_args.args` file:
+then you have in your `my_args.args` file (*read the coments*):
 
 ```cmake
 # the args file supports comments!
+# smart argument reading!
 # but not single qouts :(
 
 # the project path
@@ -39,7 +40,10 @@ source_output "C:\Users\James\Documents\MyLib\include"
 define:lib_folder "C:\Users\James\Documents\MyLib"
 
 # copy operation, '/o' at the end so it will overwrite the destination
-copy "__proj__\output\my_lib.lib" "__lib_folder__\lib\lib-64.lib" /o
+copy # Arguemnts can be passed one or more values at one line
+"__proj__\output\my_lib.lib" "__lib_folder__\lib\lib-64.lib"
+/o # this will be parsed as a part of copy
+
 # delete operation (not sure if it will be moved to the trashbin or completly erased)
 delete "__proj__\temp"
 

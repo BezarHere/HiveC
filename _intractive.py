@@ -1,7 +1,6 @@
 """
 All rights (C) 2023 reserved for Zaher abdolatif abdorab babakr (Bezar/BotatoDev)
 """
-import asyncio
 
 import glassy.utils
 import re
@@ -43,11 +42,11 @@ def print_general_help():
 	print()
 	
 	level -= 1
-	show("[REQUIRED] source_output <source output path>")
+	show("[REQUIRED] output <output path>")
 	level += 1
-	show("Where should the headers go after build?")
-	show("The folder where all the headers will be put to be loaded with the library.")
-	show("The include path replaces every '__inc__' in other paths.")
+	show("Where will build lib be at?")
+	show("The folder where all the headers (\\include), libraries (\\lib) and binaries (\\bin) will be deployied.")
+	show("The include path replaces every '__out__' in other paths.")
 	
 	print()
 	
@@ -127,6 +126,10 @@ def _proc_args_line(line: str):
 # stdout = sys.stdout.seek()
 
 def pipin_args(args_path: Path):
+	if not args_path.exists():
+		print(f"ERROR: No arguments file found at '{args_path}'/'{args_path.absolute()}'")
+		return list()
+	
 	with open(args_path, 'r', encoding='utf-8') as f:
 		text = f.read()
 	
@@ -158,7 +161,7 @@ def generate_request_from_args(args: Tape[str]):
 	
 	project_path: Path = Path()
 	src_folder: Path = Path()
-	include_folder: Path = Path()
+	output_folder: Path = Path()
 	
 	ignored_src_files_regex: set[re.Pattern] = set()
 	actions: list[Action] = list[Action]()
@@ -185,7 +188,7 @@ def generate_request_from_args(args: Tape[str]):
 		elif t == '/l':
 			live = True
 		elif t == 'copy':
-			pipe = PathPipe(args.read(), args.read())
+			pipe = PathPipe((args.read(), args.read()))
 			t = ActionType.CopyNoOverwrite
 			if args.peek() == '/o':
 				args.read()
@@ -194,7 +197,7 @@ def generate_request_from_args(args: Tape[str]):
 			actions.append(Action(t, pipe))
 		
 		elif t == 'move':
-			pipe = PathPipe(args.read(), args.read())
+			pipe = PathPipe((args.read(), args.read()))
 			t = ActionType.MoveNoOverwrite
 			if args.peek() == '/o':
 				args.read()
@@ -212,8 +215,8 @@ def generate_request_from_args(args: Tape[str]):
 			src_folder = Path(args.read())
 			found_src_folder = True
 		
-		elif t == 'source_output':
-			include_folder = Path(args.read())
+		elif t == 'output':
+			output_folder = Path(args.read())
 			found_inc_folder = True
 		
 		elif t == 'include_file_type':
@@ -233,14 +236,13 @@ def generate_request_from_args(args: Tape[str]):
 	# if len(include_file_types) == 0:
 	# 	# default c++
 	# 	include_file_types = set(get_include_file_types_default('c++'))
-	include_file_types += set(get_include_file_types_default('c++'))
+	include_file_types |= set(get_include_file_types_default('c++'))
 	
 	return Request(
 		_project=project_path,
 		_source_folder=src_folder,
-		_include_folder=include_folder,
+		_output_folder=output_folder,
 		_ignored_source_files=ignored_src_files_regex,
-		_include_output_folder=include_folder,
 		_actions=actions,
 		_strict=strict,
 		_include_file_types=include_file_types,

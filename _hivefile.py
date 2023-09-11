@@ -49,9 +49,9 @@ _actions_names: dict[ActionType, str] = \
 
 
 def _unravel_path(p: Path, processor: StrProcessor):
-	return Path(processor(str(p.expanduser().absolute())))
+	return Path(processor(str(p.expanduser()))).absolute()
 def _unravel_pipe(p: PathPipe, processor: StrProcessor):
-	return _unravel_path(p[0], processor), _unravel_path(p[1], processor)
+	return _unravel_path(Path(p[0]), processor), _unravel_path(Path(p[1]), processor)
 
 # For more custmizablity
 
@@ -150,11 +150,9 @@ class Action:
 class Request:
 	_project: Path
 	_source_folder: Path
-	_include_folder: Path
+	_output_folder: Path
 	
 	_ignored_source_files: set[re.Pattern] = set[re.Pattern]
-	
-	_include_output_folder: Path
 	
 	_actions: list[Action]
 	
@@ -165,6 +163,9 @@ class Request:
 	
 	_custom_path_defines: dict[str, str]
 	
+	def __hash__(self):
+		return hash((hash(self._project), hash(repr(self)), hash(self._source_folder), hash(self._output_folder)))
+	
 	@property
 	def project_path(self):
 		return Path(self.process_path(str(self._project)))
@@ -174,8 +175,20 @@ class Request:
 		return Path(self.process_path(str(self._source_folder)))
 	
 	@property
+	def output_folder(self):
+		return Path(self.process_path(str(self._output_folder)))
+	
+	@property
 	def include_folder(self):
-		return Path(self.process_path(str(self._include_folder)))
+		return Path(self.process_path(str(self._output_folder) + '//include'))
+	
+	@property
+	def lib_folder(self):
+		return Path(self.process_path(str(self._output_folder) + '//lib'))
+	
+	@property
+	def bin_folder(self):
+		return Path(self.process_path(str(self._output_folder) + '//bin'))
 	
 	@property
 	def wipe_include_destination_on_build(self):
@@ -199,14 +212,14 @@ class Request:
 	
 	@cache
 	def _replace_builtin(self, s: str):
-		return s.replace('__proj__', str(self._project)).replace('__src__', str(self._source_folder)).replace("__out__", str(self._include_folder))
+		return s.replace('__proj__', str(self._project)).replace('__src__', str(self._source_folder)).replace("__out__", str(self._output_folder))
 	
 	
 	def process_path(self, s: str):
 		# puting this before and after the defines helps to evade all overwrites (e.g. --define:proj "Some random, buggy path; not the --proj path!!!")
 		s = self._replace_builtin(s)
 		
-		for i, j in self._custom_path_defines:
+		for i, j in self._custom_path_defines.items():
 			s = s.replace(f"__{i}__", j)
 		
 		s = self._replace_builtin(s)
