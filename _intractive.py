@@ -3,6 +3,7 @@ All rights (C) 2023 reserved for Zaher abdolatif abdorab babakr (Bezar/BotatoDev
 """
 
 import glassy.utils
+import os
 import re
 import sys
 from glassy.utils import Tape
@@ -32,6 +33,22 @@ def print_general_help():
 	print()
 	
 	print("Usages:")
+	
+	print()
+	
+	level -= 1
+	show("/f <args file path>")
+	level += 1
+	show("Runs the argument file, Should be always the first argument.")
+	show("no more argument from the commandline will be read if this switch is present.")
+	show("[DEFAULT] if the first argument is a valid hive arguments file")
+	
+	print()
+	
+	level -= 1
+	show("/s")
+	level += 1
+	show("Directs the input from the successiding commandline arguments")
 	
 	show("[REQUIRED] source <source path>")
 	level += 1
@@ -114,19 +131,6 @@ def print_general_help():
 	show("Defines <name> with <value>, any instance of '__<name>__' in any path is replaced by '<value>'.")
 	show("For examble: --define:output __proj__\\win64")
 	
-	print()
-	
-	level -= 1
-	show("/f <args file path>")
-	level += 1
-	show("Runs the argument file, no more argument from the commandline will be read if this switch is present")
-	
-	print()
-	
-	level -= 1
-	show("/s")
-	level += 1
-	show("Directs the input from the commandline arguments, works the same even if removed")
 
 
 def print_help(subject: str):
@@ -186,9 +190,17 @@ def _parse_action_switchs(args: Tape[str]):
 	return False, False
 	
 
-def generate_request_from_args(args: Tape[str]):
+def generate_request_from_args(args: Tape[str], working_path: Path):
 	found_src_folder: bool = False
 	found_out_folder: bool = False
+	working_path.resolve()
+	working_path_str = str(working_path).strip('\\').strip('/')
+	
+	def read_path():
+		s = args.read().strip().strip('"')
+		if len(s) > 2 and s[:2] == '..':
+			s = working_path_str + s[2:]
+		return Path(s)
 	
 	project_path: Path = Path()
 	src_folder: Path = Path()
@@ -219,7 +231,7 @@ def generate_request_from_args(args: Tape[str]):
 		elif t == '/l':
 			live = True
 		elif t == 'copy':
-			pipe = PathPipe((args.read().strip().strip('"'), args.read().strip().strip('"')))
+			pipe = PathPipe((read_path(), read_path()))
 			overwrite, silent = _parse_action_switchs(args)
 				
 			actions.append(
@@ -227,7 +239,7 @@ def generate_request_from_args(args: Tape[str]):
 			)
 		
 		elif t == 'move':
-			pipe = PathPipe((args.read().strip().strip('"'), args.read().strip().strip('"')))
+			pipe = PathPipe((read_path(), read_path()))
 			overwrite, silent = _parse_action_switchs(args)
 				
 			actions.append(
@@ -235,7 +247,7 @@ def generate_request_from_args(args: Tape[str]):
 			)
 		
 		elif t == 'rename':
-			pipe = PathPipe((args.read().strip().strip('"'), args.read().strip().strip('"')))
+			pipe = PathPipe((read_path(), read_path()))
 			overwrite, silent = _parse_action_switchs(args)
 			
 			actions.append(
@@ -243,7 +255,7 @@ def generate_request_from_args(args: Tape[str]):
 			)
 		
 		elif t == 'delete' or t == 'del':
-			pipe = PathPipe((args.read().strip().strip('"'), None))
+			pipe = PathPipe((read_path(), None))
 			
 			# Currently has no effects
 			overwrite, silent = _parse_action_switchs(args)
@@ -256,14 +268,14 @@ def generate_request_from_args(args: Tape[str]):
 			ignored_src_files_regex.add(re.compile(args.read()))
 		
 		elif t == 'project':
-			project_path = Path(args.read())
+			project_path = read_path()
 		
 		elif t == 'source':
-			src_folder = Path(args.read())
+			src_folder = read_path()
 			found_src_folder = True
 		
 		elif t == 'output':
-			output_folder = Path(args.read())
+			output_folder = read_path()
 			found_out_folder = True
 		
 		elif t == 'include_file_type':
@@ -273,7 +285,7 @@ def generate_request_from_args(args: Tape[str]):
 			include_file_types += set(get_include_file_types_default(args.read()))
 		
 		elif len(t) > 7 and t[:7] == 'define:':
-			custom_path_defines[t[7:]] = args.read()
+			custom_path_defines[t[7:]] = str(read_path())
 	
 	if not found_src_folder:
 		raise ValueError("No 'source' folder path found: A required argument can't be found, refere to the docs!")
@@ -297,6 +309,14 @@ def generate_request_from_args(args: Tape[str]):
 		_custom_path_defines=custom_path_defines
 	)
 
+def _is_valid_file(p: str):
+	# noinspection PyBroadException
+	try:
+		p = Path(p).resolve()
+		return p.is_file()
+	except:...
+	return False
+
 def _main():
 	global files_mode, async_mode
 	live = False
@@ -310,28 +330,30 @@ def _main():
 	
 	mode_str = args.peek()
 	
-	if mode_str == '/f':
-		args.read()
-		files_mode = True
-	else:
-		if mode_str == '/c':
-			args.read()
-		elif mode_str == '/l':
-			args.read()
-			live = True
+	valid_f: bool = False
 	
+	if mode_str == '/f' or (valid_f := _is_valid_file(mode_str)):
+		if not valid_f:
+			args.read()
+		files_mode = True
+	elif mode_str == '/c':
+		args.read()
+	elif mode_str == '/l':
+		args.read()
+		live = True
 	
 	requests: list[Request] = []
 	
 	if files_mode:
 		while args:
-			args = Tape(pipin_args(Path(args.read()).resolve()))
-			req = generate_request_from_args(args)
+			file_path = Path(args.read()).resolve()
+			args = Tape(pipin_args(file_path))
+			req = generate_request_from_args(args, file_path.parent)
 			requests.append(req)
 			req.run()
 			
 	else:
-		req = generate_request_from_args(args)
+		req = generate_request_from_args(args, Path(os.getcwd()))
 		req.run()
 	
 	print("[HiveCpp]--------------Done------------")
