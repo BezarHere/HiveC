@@ -59,18 +59,38 @@ def print_general_help():
 	print()
 	
 	level -= 1
-	show("copy <src path> <dst path>")
+	show("copy <src path> <dst path> [, /o, /overwrite] [, /s, /silent]")
 	level += 1
 	show("A copy command from the src path to the dst path.")
-	show("Add the switch '/o' to make it overwrite the destination")
+	show("the switch '/o' or '/overwrite' makes the copy overwrite the destination")
+	show("the switch '/s' or '/silent' makes the copy silently handle some errors (e.g. when the source doesn't exist)")
 	
 	print()
 	
 	level -= 1
-	show("move <src path> <dst path>")
+	show("move <src path> <dst path> [, /o, /overwrite] [, /s, /silent]")
 	level += 1
 	show("A move command from the src path to the dst path.")
-	show("Add the switch '/o' to make it overwrite the destination")
+	show("the switch '/o' or '/overwrite' makes the move overwrite the destination")
+	show("the switch '/s' or '/silent' makes the move silently handle some errors (e.g. when the source doesn't exist)")
+	
+	print()
+	
+	level -= 1
+	show("rename <src path> <new_name> [, /o, /overwrite] [, /s, /silent]")
+	level += 1
+	show("A rename command renames the src files/folder to new_name.")
+	show("the switch '/o' or '/overwrite' makes the rename overwrite any other files with the new name")
+	show("the switch '/s' or '/silent' makes the rename silently handle some errors (e.g. when the source doesn't exist or if there is a name collision without the overwrite switch)")
+	
+	print()
+	
+	level -= 1
+	show("delete <target path> [, /o, /overwrite] [, /s, /silent]")
+	level += 1
+	show("A rename command renames the src files/folder to new_name.")
+	show("the switch '/o' or '/overwrite' has no effects in delete actions")
+	show("the switch '/s' or '/silent' makes the delete silently handle some errors (currently it has no effects)")
 	
 	print()
 	
@@ -121,8 +141,6 @@ def _proc_args_line(line: str):
 		return ''
 	return line.strip('"')
 
-
-
 # stdout = sys.stdout.seek()
 
 def pipin_args(args_path: Path):
@@ -144,8 +162,6 @@ def pipin_args(args_path: Path):
 			args.append(i)
 	
 	return args
-		
-	
 
 def get_include_file_types_default(for_lang: str):
 	match for_lang:
@@ -155,9 +171,24 @@ def get_include_file_types_default(for_lang: str):
 			return 'h', 'hpp', 'hxx', 'inl'
 	return tuple()
 
+def _parse_action_switchs(args: Tape[str]):
+	if args.peek() == '/o' or args.peek() == '/overwrite':
+		args.read()
+		if args.peek() == '/s' or args.peek() == '/silent':
+			args.read()
+			return True, True
+		return True, False
+	
+	if args.peek() == '/s' or args.peek() == '/silent':
+		args.read()
+		return False, True
+	
+	return False, False
+	
+
 def generate_request_from_args(args: Tape[str]):
 	found_src_folder: bool = False
-	found_inc_folder: bool = False
+	found_out_folder: bool = False
 	
 	project_path: Path = Path()
 	src_folder: Path = Path()
@@ -188,22 +219,38 @@ def generate_request_from_args(args: Tape[str]):
 		elif t == '/l':
 			live = True
 		elif t == 'copy':
-			pipe = PathPipe((args.read(), args.read()))
-			t = ActionType.CopyNoOverwrite
-			if args.peek() == '/o':
-				args.read()
-				t = ActionType.Copy
+			pipe = PathPipe((args.read().strip().strip('"'), args.read().strip().strip('"')))
+			overwrite, silent = _parse_action_switchs(args)
 				
-			actions.append(Action(t, pipe))
+			actions.append(
+				Action(ActionType.Copy if overwrite else ActionType.Copy, pipe, silent)
+			)
 		
 		elif t == 'move':
-			pipe = PathPipe((args.read(), args.read()))
-			t = ActionType.MoveNoOverwrite
-			if args.peek() == '/o':
-				args.read()
-				t = ActionType.Move
+			pipe = PathPipe((args.read().strip().strip('"'), args.read().strip().strip('"')))
+			overwrite, silent = _parse_action_switchs(args)
 				
-			actions.append(Action(t, pipe))
+			actions.append(
+				Action(ActionType.Move if overwrite else ActionType.MoveNoOverwrite, pipe, silent)
+			)
+		
+		elif t == 'rename':
+			pipe = PathPipe((args.read().strip().strip('"'), args.read().strip().strip('"')))
+			overwrite, silent = _parse_action_switchs(args)
+			
+			actions.append(
+				Action(ActionType.RenameOverwrite if overwrite else ActionType.Rename, pipe, silent)
+			)
+		
+		elif t == 'delete' or t == 'del':
+			pipe = PathPipe((args.read().strip().strip('"'), None))
+			
+			# Currently has no effects
+			overwrite, silent = _parse_action_switchs(args)
+			
+			actions.append(
+				Action(ActionType.Delete, pipe, silent)
+			)
 		
 		elif t == 'ignore':
 			ignored_src_files_regex.add(re.compile(args.read()))
@@ -217,7 +264,7 @@ def generate_request_from_args(args: Tape[str]):
 		
 		elif t == 'output':
 			output_folder = Path(args.read())
-			found_inc_folder = True
+			found_out_folder = True
 		
 		elif t == 'include_file_type':
 			include_file_types.add(args.read())
@@ -229,9 +276,9 @@ def generate_request_from_args(args: Tape[str]):
 			custom_path_defines[t[7:]] = args.read()
 	
 	if not found_src_folder:
-		raise ValueError("No src folder path found: A required argument can't be found, refere to the docs!")
-	if not found_inc_folder:
-		raise ValueError("No include folder path found: A required argument can't be found, refere to the docs!")
+		raise ValueError("No 'source' folder path found: A required argument can't be found, refere to the docs!")
+	if not found_out_folder:
+		raise ValueError("No 'output' folder path found: A required argument can't be found, refere to the docs!")
 	
 	# if len(include_file_types) == 0:
 	# 	# default c++
@@ -287,7 +334,7 @@ def _main():
 		req = generate_request_from_args(args)
 		req.run()
 	
-	print("-------DONE-------")
+	print("[HiveCpp]--------------Done------------")
 	
 	if live:
 		input()

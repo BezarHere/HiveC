@@ -64,6 +64,7 @@ def _dumy_str_proc(x: str):
 class Action:
 	action_type: ActionType
 	data: PathPipe
+	quite: bool = False
 	
 	@property
 	def expectes_output(self):
@@ -80,6 +81,8 @@ class Action:
 				from_path, to_path = _unravel_pipe(self.data, path_processor)
 				
 				if not from_path.exists():
+					if self.quite:
+						return
 					raise FileNotFoundError(f"Copy action's copy source: '{from_path}'")
 				
 				if not to_path.parent.exists():
@@ -97,6 +100,8 @@ class Action:
 				from_path, to_path = _unravel_pipe(self.data, path_processor)
 				
 				if not from_path.exists():
+					if self.quite:
+						return
 					raise FileNotFoundError(f"Move action's copy source: '{from_path}'")
 				
 				if not to_path.parent.exists():
@@ -128,13 +133,17 @@ class Action:
 				
 				
 				if not from_path.exists():
+					if self.quite:
+						return
 					raise FileNotFoundError(f"Rename action's source: '{from_path}'")
 				
 
 				new_name = Path(str(from_path.parent.absolute()) + '\\' + str(to_path))
 				
 				if self.action_type == ActionType.Rename and new_name.exists():
-					return
+					if self.quite:
+						return
+					raise NameError(f"There is already a file/folder with the path {new_name}")
 				
 				# FIXME: Is there a better way?
 				shutil.move(from_path, new_name)
@@ -290,6 +299,8 @@ def _run(req: Request):
 			i.execute(req.process_path, req.is_strict)
 		except Exception as e:
 			print(f"[HIVEFILE]Error while tring to run a {i.name} action:")
+			print(f"  with paths: '{i.data[0]}',\n"
+				  f"              '{i.data[1]}'")
 			print('\t' + repr(e).replace('\n', '\n\t'))
 				
 	
