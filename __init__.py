@@ -1,16 +1,11 @@
+"""
+All rights (C) 2023 reserved for Zaher abdolatif abdorab babakr (Bezar/BotatoDev)
+"""
 
 __version__ = '0.1.0'
 
 import typing
-from _hivefile import HiveFile
+from ._hivefile import PathPipe, Request, Action, ActionType
 
-def main():
-	x = int | float
-	y = typing.Union[int, float]
-	print(str(x), str(y))
-	print(repr(x), repr(y))
 
-if __name__ == '__main__':
-	main()
-
-del main
+__all__ = [ "PathPipe", "Request", "Action", "ActionType" ]

@@ -1,80 +1,286 @@
-from pathlib import Path
-import tomllib as toml
-from typing import Any, BinaryIO, overload
+"""
+All rights (C) 2023 reserved for Zaher abdolatif abdorab babakr (Bezar/BotatoDev)
+"""
+import enum
+from dataclasses import dataclass
 from functools import cache
-from _actions import Action
-import re
+from typing import Callable, Union
+import shutil
+import os, re
+from pathlib import Path
+
+PathPipe = tuple[Path, Path | None]
+StrProcessor = Callable[[str], str]
+
+_run_define: Union[Callable, None] = None
+
+_path_split_re = re.compile(r'[\\/]')
+
+class ActionType(enum.IntEnum):
+	Copy = 0
+	CopyNoOverwrite = 1
+	Move = 2
+	MoveNoOverwrite = 3
+	Delete = 4
+	Rename = 5
+	RenameOverwrite = 6
+
+_actions_expected_paths_count: dict[ActionType, int] = \
+	{
+		ActionType.Copy: 2,
+		ActionType.CopyNoOverwrite: 2,
+		ActionType.Move: 2,
+		ActionType.MoveNoOverwrite: 2,
+		ActionType.Delete: 1,
+		ActionType.Rename: 2,
+		ActionType.RenameOverwrite: 2,
+	}
+
+_actions_names: dict[ActionType, str] = \
+	{
+		ActionType.Copy: "copy",
+		ActionType.CopyNoOverwrite: "copy (no overwrite)",
+		ActionType.Move: "move",
+		ActionType.MoveNoOverwrite: "move (no overwrite)",
+		ActionType.Delete: "delete",
+		ActionType.Rename: "rename",
+		ActionType.RenameOverwrite: "rename (overwrite)",
+	}
 
 
-class HiveFile:
-	project: Path
-	sources: list[Path]
-	outputs: list[Path]
-	_source_output_links: dict[int, int]
-	actions: list[Action]
+def _unravel_path(p: Path, processor: StrProcessor):
+	return Path(processor(str(p.expanduser().absolute())))
+def _unravel_pipe(p: PathPipe, processor: StrProcessor):
+	return _unravel_path(p[0], processor), _unravel_path(p[1], processor)
+
+# For more custmizablity
+
+errout: Callable = print
+
+def _dumy_str_proc(x: str):
+	return x
+
+@dataclass(slots=True, frozen=True)
+class Action:
+	action_type: ActionType
+	data: PathPipe
 	
-	def __init__(self, project: Path):
-		self.project = project
-		_load(self, toml.load(project))
+	@property
+	def expectes_output(self):
+		return _actions_expected_paths_count[self.action_type] > 1
+	
+	@property
+	def name(self):
+		return _actions_names[self.action_type]
+	
+	def execute(self, path_processor: StrProcessor, strict: bool = False):
+		match self.action_type:
+			# Copy/CopyNoOverwrite
+			case ActionType.Copy | ActionType.CopyNoOverwrite:
+				from_path, to_path = _unravel_pipe(self.data, path_processor)
+				
+				if not from_path.exists():
+					raise FileNotFoundError(f"Copy action's copy source: '{from_path}'")
+				
+				if not to_path.parent.exists():
+					if strict:
+						raise ValueError(f"Copy action's copy destination is't valid: '{to_path}'")
+					os.makedirs(to_path.parent)
+				
+				if self.action_type == ActionType.CopyNoOverwrite and to_path.exists():
+					return
+				
+				shutil.copy(from_path, to_path)
+				
+			# Move/MoveNoOverwrite
+			case ActionType.Move | ActionType.MoveNoOverwrite:
+				from_path, to_path = _unravel_pipe(self.data, path_processor)
+				
+				if not from_path.exists():
+					raise FileNotFoundError(f"Move action's copy source: '{from_path}'")
+				
+				if not to_path.parent.exists():
+					if strict:
+						raise ValueError(f"Move action's copy destination is't valid: '{to_path}'")
+					os.makedirs(to_path.parent)
+				
+				if self.action_type == ActionType.MoveNoOverwrite and to_path.exists():
+					return
+				
+				shutil.move(from_path, to_path)
+				
+			# Delete
+			case ActionType.Delete:
+				target_path = _unravel_path(self.data[0], path_processor)
+				
+				if not target_path.exists():
+					if strict:
+						raise FileNotFoundError(f"Delete action's target: '{target_path}'")
+				
+				if target_path.is_dir():
+					shutil.rmtree(target_path)
+				else:
+					os.remove(target_path)
+				
+			# Rename/RenameOverwrite
+			case ActionType.Rename | ActionType.RenameOverwrite:
+				from_path, to_path = _unravel_pipe(self.data, path_processor)
+				
+				
+				if not from_path.exists():
+					raise FileNotFoundError(f"Rename action's source: '{from_path}'")
+				
+
+				new_name = Path(str(from_path.parent.absolute()) + '\\' + str(to_path))
+				
+				if self.action_type == ActionType.Rename and new_name.exists():
+					return
+				
+				# FIXME: Is there a better way?
+				shutil.move(from_path, new_name)
+				
+			# DEFAULT
+			case _:
+				raise IndexError(f"Invalid/Unknown Action type: {self.action_type}")
+				
+			
 	
 	
+@dataclass(slots=True, kw_only=True)
+class Request:
+	_project: Path
+	_source_folder: Path
+	_include_folder: Path
+	
+	_ignored_source_files: set[re.Pattern] = set[re.Pattern]
+	
+	_include_output_folder: Path
+	
+	_actions: list[Action]
+	
+	_strict: bool = False
+	
+	_include_file_types: set[str]
+	_override_include_folder: bool = True  # will delete include folder to apply all changes in src folder to include folder
+	
+	_custom_path_defines: dict[str, str]
+	
+	@property
+	def project_path(self):
+		return Path(self.process_path(str(self._project)))
+	
+	@property
+	def source_folder(self):
+		return Path(self.process_path(str(self._source_folder)))
+	
+	@property
+	def include_folder(self):
+		return Path(self.process_path(str(self._include_folder)))
+	
+	@property
+	def wipe_include_destination_on_build(self):
+		return self._override_include_folder
+	
+	@property
+	def is_strict(self):
+		return self._strict
+	
+	@property
+	def ignored_source_files_reqex(self):
+		return self._ignored_source_files
+	
+	@property
+	def actions(self):
+		return self._actions
+	
+	def get_include_file_regex(self):
+		return re.compile(f".+?\.({'|'.join(self._include_file_types)})")
 	
 	
-	def get_linked_source_output(self):
-		d = dict[Path, Path]()
-		for i, v in enumerate(self.sources):
-			if i in self._source_output_links:
-				d[v] = self.outputs[self._source_output_links[i]]
+	@cache
+	def _replace_builtin(self, s: str):
+		return s.replace('__proj__', str(self._project)).replace('__src__', str(self._source_folder)).replace("__out__", str(self._include_folder))
+	
+	
+	def process_path(self, s: str):
+		# puting this before and after the defines helps to evade all overwrites (e.g. --define:proj "Some random, buggy path; not the --proj path!!!")
+		s = self._replace_builtin(s)
+		
+		for i, j in self._custom_path_defines:
+			s = s.replace(f"__{i}__", j)
+		
+		s = self._replace_builtin(s)
+		return s
+	
+	def get_source_file(self):
+		skip_re = self.get_include_file_regex()
+		def safe_scan(path):
+			return (i for i in os.scandir(path) if i.is_dir() or skip_re.search(i.path) is not None)
+		search_stack: list[os.DirEntry] = list(safe_scan(self.source_folder))
+		files_stack: list[Path] = []
+		while search_stack:
+			j = search_stack.pop()
+			if j.is_dir():
+				search_stack += list(safe_scan(j.path))
 			else:
-				d[v] = self.outputs[i]
-		return d
-
-	def excute_actions(self):
-		for i in self.actions:
-			i.execute()
+				files_stack.append(Path(j.path))
+		return files_stack
 	
-# ----------------------------------------
-
-
-_repr_types_re = re.compile(r"(\w+)[ ,\]]")
-
-@cache
-def _repr_types(types):
-	s = tuple(_repr_types_re.finditer(str(types) + ' '))
-	r = ''
-	sl = len(s)
-	for i, v in enumerate(s):
-		if i == sl - 1:
-			r += ' or '
-		elif i != 0:
-			r += ', '
-		r += v
-	return r
-
-def _load_typed(name: str, typed: type, data: dict, optional: bool = True):
-	if not name in data:
-		if optional:
-			return None
-		raise AttributeError(f"the required field '{name}' does not exist")
-	if not isinstance(data[name], typed):
-		raise TypeError(f"the field '{name}' should be a type {_repr_types(typed)}")
-	return data[name]
-
-def _load_unwrapped(hivefile: HiveFile, data: dict[str, Any]):
-	hivefile.sources = []
-	hivefile.outputs = []
+	def run(self):
+		_run_define(self)
 	
-	n = _load_typed('source', str | Path, data)
-	if n is not None:
-		hivefile.sources.append(Path(n))
+
+def command_line_path():
+	return os.getcwd()
+
+
+def _process_sources(rq: Request):
+	src_path = rq.source_folder
+	include_path = rq.include_folder
+	filetype_re = rq.get_include_file_regex()
 	
-	if 'sources' in data:
-		...
+	if not src_path.exists():
+		raise ValueError(f"src path is DOESN'T exsit: '{src_path}'")
+	if not src_path.is_dir():
+		raise ValueError(f"src path is NOT a directory: '{src_path}'")
+	
+	if rq.wipe_include_destination_on_build:
+		if include_path.exists():
+			shutil.rmtree(include_path)
+		os.makedirs(include_path, exist_ok=True)
+	elif not include_path.is_dir():
+		if rq.is_strict:
+			raise ValueError(f"[STRICT] invalid include path '{include_path}'")
+		os.makedirs(include_path, exist_ok=True)
+	
+	include_files = rq.get_source_file()
+	
+	ignored_source_files_regex = rq.ignored_source_files_reqex
+	
+	for ppath in include_files:
+		if any((i.search(str(ppath.absolute())) is not None or i.search(str(ppath.name)) is not None) for i in ignored_source_files_regex):
+			continue
+		os.makedirs(ppath.parent, exist_ok=True)
+		
+		# FIXME: wtf? does it even work?
+		shutil.copy(ppath,  Path(str(ppath.absolute()).replace(str(src_path.absolute()), str(include_path.absolute()) + '\\')).resolve())
 
-
-def _load(hivefile: HiveFile, data: dict[str, Any]):
+def _run(req: Request):
 	try:
-		_load_unwrapped(hivefile, data)
-	except e as BaseException:
-		raise RuntimeError(f"Error will loading the hive file at '{hivefile.project}':")
+		_process_sources(req)
+	except Exception as e:
+		print(f"[HIVEFILE]Failing to build at '{req.project_path}'")
 		raise e
+	
+	for i in req.actions:
+		try:
+			i.execute(req.process_path, req.is_strict)
+		except Exception as e:
+			print(f"[HIVEFILE]Error while tring to run a {i.name} action:")
+			print('\t' + repr(e).replace('\n', '\n\t'))
+				
+	
+
+## Importent!
+_run_define = _run
+
