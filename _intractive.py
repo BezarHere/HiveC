@@ -9,6 +9,8 @@ import sys
 from glassy.utils import Tape
 from pathlib import Path
 
+from _hivefile import Action, Request, PathPipe, ActionType
+
 async_mode: bool = False
 
 _verbose: bool = False
@@ -223,7 +225,7 @@ def generate_request_from_args(args: Tape[str], working_path: Path):
 	
 	def read_path():
 		s = args.read().strip().strip('"')
-		if len(s) > 2 and s[:2] == '..':
+		if len(s) >= 2 and s[:2] == '..':
 			s = working_path_str + s[2:]
 		return Path(s)
 	
@@ -450,7 +452,7 @@ def main():
 		req = generate_request_from_args(args, Path(os.getcwd()))
 		req.run()
 	
-	print("[HiveCpp]--------------Done------------")
+	print("[HiveC]--------------Done------------")
 	
 	if live:
 		input()

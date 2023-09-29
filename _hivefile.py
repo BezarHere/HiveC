@@ -19,9 +19,9 @@ _verbose: bool = True
 
 def query_run_define():
 	global _run_define
-	_run_define = _run
 	if _run_define is not None:
-		del query_run_define
+		return
+	_run_define = _run
 
 class ActionType(enum.IntEnum):
 	Copy = 0
@@ -281,7 +281,7 @@ def _process_sources(rq: Request):
 	include_path = rq.include_folder
 	
 	if not src_path.exists():
-		raise ValueError(f"src path is DOESN'T exsit: '{src_path}'")
+		raise ValueError(f"src path DOESN'T exsit: '{src_path}'")
 	if not src_path.is_dir():
 		raise ValueError(f"src path is NOT a directory: '{src_path}'")
 	
