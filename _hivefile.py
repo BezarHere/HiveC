@@ -17,6 +17,12 @@ _run_define: Union[Callable, None] = None
 _path_split_re = re.compile(r'[\\/]')
 _verbose: bool = True
 
+def query_run_define():
+	global _run_define
+	_run_define = _run
+	if _run_define is not None:
+		del query_run_define
+
 class ActionType(enum.IntEnum):
 	Copy = 0
 	CopyNoOverwrite = 1
@@ -321,5 +327,5 @@ def _run(req: Request):
 	
 
 ## Importent!
-_run_define = _run
+query_run_define()
 
