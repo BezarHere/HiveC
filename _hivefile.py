@@ -245,6 +245,8 @@ class Request:
 	
 	@cache
 	def _replace_builtin(self, s: str):
+		if not isinstance(s, str):
+			s = str(s)
 		return s.replace('__proj__', str(self._project)).replace('__src__', str(self._source_folder)).replace("__out__", str(self._output_folder))
 	
 	
