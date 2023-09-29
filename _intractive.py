@@ -1,7 +1,7 @@
 """
 All rights (C) 2023 reserved for Zaher abdolatif abdorab babakr (Bezar/BotatoDev)
 """
-
+import enum
 import glassy.utils
 import os
 import re
@@ -13,6 +13,12 @@ from _hivefile import Request, Action, ActionType, PathPipe
 
 async_mode: bool = False
 files_mode: bool = False
+
+class RunMode(enum.IntEnum):
+	NoMode = 0
+	FileArgs = 1
+	CommandLineArgs = 2
+	
 
 def print_general_help():
 	level: int = 1
@@ -346,13 +352,14 @@ def create_new_template_hivefile(filepath: str | Path, override: bool = False):
 				'',
 			)
 		)
-	
+	print("Created a new hivec deploy project file!")
 	return None
 
 def main():
 	global files_mode, async_mode
 	live = False
 	
+	mode: RunMode = RunMode.NoMode
 	args: Tape[str] = Tape(sys.argv[1:])
 	
 	if len(args) == 0 or args.peek() == '-h' or args.peek() == '--help' or args.peek() == '?':
@@ -365,30 +372,31 @@ def main():
 	valid_first_command_path: bool = _is_valid_file(first_command)
 	
 	if valid_first_command_path:
-		files_mode = True
+		mode = RunMode.FileArgs
 	else:
 		args.read()
 		match first_command:
 			case '/f':
-				files_mode = True
+				mode = RunMode.FileArgs
 			case '/c':
-				...
-			case '/l':
-				live = True
+				mode = RunMode.CommandLineArgs
 			case 'new':
+				mode = RunMode.NoMode
 				p = os.getcwd()
 				
-				if os.path.isdir(args.peek()):
-					p = Path(p).joinpath('hivec.args').resolve()
-					args.read()
-				elif os.path.isfile(args.peek()):
-					p = Path(p).resolve()
-					args.read()
+				if args:
+					if os.path.isdir(args.peek()):
+						p = Path(p).joinpath('hivec.args').resolve()
+						args.read()
+					elif os.path.isfile(args.peek()):
+						p = Path(p).resolve()
+						args.read()
 					
 				
-				err = create_new_template_hivefile(p, args.peek() == '/overwrite' or args.peek() == '/o')
+				err = create_new_template_hivefile(p, args and (args.peek() == '/overwrite' or args.peek() == '/o'))
 				if err is not None:
 					print(err)
+				
 		
 	
 	if first_command == '/f' or (valid_first_command_path := _is_valid_file(first_command)):
@@ -404,15 +412,14 @@ def main():
 	
 	requests: list[Request] = []
 	
-	if files_mode:
+	if mode == RunMode.FileArgs:
 		while args:
 			file_path = Path(args.read()).resolve()
 			args = Tape(pipin_args(file_path))
 			req = generate_request_from_args(args, file_path.parent)
 			requests.append(req)
 			req.run()
-			
-	else:
+	elif mode == RunMode.CommandLineArgs:
 		req = generate_request_from_args(args, Path(os.getcwd()))
 		req.run()
 	
@@ -420,5 +427,4 @@ def main():
 	
 	if live:
 		input()
-
 

@@ -35,7 +35,7 @@ project "C:\Users\James\Desktop\MyProject"
 source "__proj__\src"
 
 # the output for all headers in the source folder
-source_output "C:\Users\James\Documents\MyLib\include"
+output "C:\Users\James\Documents\MyLib\include"
 
 # defining a macro with name 'lib_folder' that will replace every '__lib_folder__'
 define:lib_folder "C:\Users\James\Documents\MyLib"
