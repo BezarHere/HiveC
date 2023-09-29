@@ -384,6 +384,7 @@ def main():
 				elif os.path.isfile(args.peek()):
 					p = Path(p).resolve()
 					args.read()
+					
 				
 				err = create_new_template_hivefile(p, args.peek() == '/overwrite' or args.peek() == '/o')
 				if err is not None:
