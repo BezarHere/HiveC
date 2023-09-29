@@ -9,7 +9,7 @@ import sys
 from glassy.utils import Tape
 from pathlib import Path
 
-from ._hivefile import Request, Action, ActionType, PathPipe
+from _hivefile import Request, Action, ActionType, PathPipe
 
 async_mode: bool = False
 files_mode: bool = False
@@ -317,7 +317,39 @@ def _is_valid_file(p: str):
 	except:...
 	return False
 
-def _main():
+def create_new_template_hivefile(filepath: str | Path, override: bool = False):
+	if isinstance(filepath, str):
+		filepath = Path(filepath)
+	filepath = filepath.resolve()
+	if filepath.exists():
+		if not override:
+			return f"Can't create a new hivefile, path '{filepath}' already exists"
+	
+	with open(filepath, 'w') as f:
+		f.writelines(
+			(
+				'# project path, or \'..\' to make it the current dir the file resides in',
+				'project ".."',
+				'',
+				'# source path, where the headers should be, \'__proj__\' is replaced by the project path.',
+				'# the source path replaces every \'__src__\' in the other paths',
+				'source "__proj__\src"',
+				'',
+				'# ouput path, where the headers should go, \'__proj__\' is replaced by the project path',
+				'# the output path replaces every \'__out__\' in the other paths',
+				'output "__proj__\output"',
+				'',
+				'# headers with their path matching the given REGEX EXP (note that it does not use glob) are ignored.',
+				'# just "pch.h" will ignore every file named "pch.h" or has "pch.h" in it\'s filepath',
+				'ignore pch.h',
+				'ignore internal.h',
+				'',
+			)
+		)
+	
+	return None
+
+def main():
 	global files_mode, async_mode
 	live = False
 	
@@ -326,21 +358,48 @@ def _main():
 	if len(args) == 0 or args.peek() == '-h' or args.peek() == '--help' or args.peek() == '?':
 		print_general_help()
 		input("\nPress anykey to exit...")
-		exit()
+		return
 	
-	mode_str = args.peek()
+	first_command = args.peek()
 	
-	valid_f: bool = False
+	valid_first_command_path: bool = _is_valid_file(first_command)
 	
-	if mode_str == '/f' or (valid_f := _is_valid_file(mode_str)):
-		if not valid_f:
+	if valid_first_command_path:
+		files_mode = True
+	else:
+		args.read()
+		match first_command:
+			case '/f':
+				files_mode = True
+			case '/c':
+				...
+			case '/l':
+				live = True
+			case 'new':
+				p = os.getcwd()
+				
+				if os.path.isdir(args.peek()):
+					p = Path(p).joinpath('hivec.args').resolve()
+					args.read()
+				elif os.path.isfile(args.peek()):
+					p = Path(p).resolve()
+					args.read()
+				
+				err = create_new_template_hivefile(p, args.peek() == '/overwrite' or args.peek() == '/o')
+				if err is not None:
+					print(err)
+		
+	
+	if first_command == '/f' or (valid_first_command_path := _is_valid_file(first_command)):
+		if not valid_first_command_path:
 			args.read()
 		files_mode = True
-	elif mode_str == '/c':
+	elif first_command == '/c':
 		args.read()
-	elif mode_str == '/l':
+	elif first_command == '/l':
 		args.read()
 		live = True
+	
 	
 	requests: list[Request] = []
 	
@@ -360,7 +419,5 @@ def _main():
 	
 	if live:
 		input()
-	
-	exit(0)
 
 
