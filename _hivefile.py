@@ -176,7 +176,8 @@ class Request:
 	_source_folder: Path
 	_output_folder: Path
 	
-	_ignored_source_files: set[re.Pattern] = set[re.Pattern]
+	_source_files_blacklist_regexes: set[re.Pattern] = set[re.Pattern]
+	_inverted_blacklist: bool = False
 	
 	_actions: list[Action]
 	
@@ -223,12 +224,16 @@ class Request:
 		return self._strict
 	
 	@property
-	def ignored_source_files_reqex(self):
-		return self._ignored_source_files
+	def blacklist_regexes(self):
+		return self._source_files_blacklist_regexes
 	
 	@property
 	def actions(self):
 		return self._actions
+	
+	@property
+	def is_blacklist_inverted(self):
+		return self._inverted_blacklist
 	
 	def get_include_file_regex(self):
 		return re.compile(f".+?\.({'|'.join(self._include_file_types)})")
@@ -295,10 +300,13 @@ def _process_sources(rq: Request):
 	
 	include_files = rq.get_source_file()
 	
-	ignored_source_files_regex = rq.ignored_source_files_reqex
+	blacklist_regexes = rq.blacklist_regexes
 	
 	for ppath in include_files:
-		if any((i.search(str(ppath.absolute())) is not None or i.search(str(ppath.name)) is not None) for i in ignored_source_files_regex):
+		if any((i.search(str(ppath.absolute())) is not None or i.search(str(ppath.name)) is not None) for i in blacklist_regexes):
+			if not rq.is_blacklist_inverted:
+				continue
+		elif rq.is_blacklist_inverted:
 			continue
 		os.makedirs(ppath.parent, exist_ok=True)
 		

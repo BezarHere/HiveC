@@ -9,8 +9,6 @@ import sys
 from glassy.utils import Tape
 from pathlib import Path
 
-from _hivefile import Request, Action, ActionType, PathPipe
-
 async_mode: bool = False
 
 _verbose: bool = False
@@ -122,9 +120,17 @@ def print_general_help():
 	print()
 	
 	level -= 1
-	show("ignore <header file>")
+	show("blacklist <header file>")
 	level += 1
-	show("Ingnores a header from transfering (deploying) to the include folder.")
+	show("puts the header into the blacklist, if inverted; the blacklisted header will be whitelisted.")
+	show("Note: this uses REGEX and all the list is tested against the filepath.")
+	
+	print()
+	
+	level -= 1
+	show("invert_blacklist")
+	level += 1
+	show("inverts the blacklist to a whitelist.")
 	
 	print()
 	
@@ -140,13 +146,26 @@ def print_general_help():
 	level += 1
 	show("Defines <name> with <value>, any instance of '__<name>__' in any path is replaced by '<value>'.")
 	show("For examble: --define:output __proj__\\win64")
-	
-
 
 def print_help(subject: str):
 	if not subject:
 		print_general_help()
 		return
+
+
+def _parse_action_switchs(args: Tape[str]):
+	if args.peek() == '/o' or args.peek() == '/overwrite':
+		args.read()
+		if args.peek() == '/s' or args.peek() == '/silent':
+			args.read()
+			return True, True
+		return True, False
+	
+	if args.peek() == '/s' or args.peek() == '/silent':
+		args.read()
+		return False, True
+	
+	return False, Fal
 
 
 def _proc_args_line(line: str):
@@ -155,9 +174,19 @@ def _proc_args_line(line: str):
 		return ''
 	return line.strip('"')
 
-# stdout = sys.stdout.seek()
 
-def pipin_args(args_path: Path):
+def _is_valid_file(p: str):
+	# noinspection PyBroadException
+	try:
+		p = Path(p).resolve()
+		return p.is_file()
+	except:
+		# TODO: error handling
+		...
+	return False
+
+
+def parse_args_file(args_path: Path):
 	if not args_path.exists():
 		print(f"ERROR: No arguments file found at '{args_path}'/'{args_path.absolute()}'")
 		return list()
@@ -177,6 +206,7 @@ def pipin_args(args_path: Path):
 	
 	return args
 
+
 def get_include_file_types_default(for_lang: str):
 	match for_lang:
 		case "c":
@@ -184,21 +214,6 @@ def get_include_file_types_default(for_lang: str):
 		case "c++":
 			return 'h', 'hpp', 'hxx', 'inl'
 	return tuple()
-
-def _parse_action_switchs(args: Tape[str]):
-	if args.peek() == '/o' or args.peek() == '/overwrite':
-		args.read()
-		if args.peek() == '/s' or args.peek() == '/silent':
-			args.read()
-			return True, True
-		return True, False
-	
-	if args.peek() == '/s' or args.peek() == '/silent':
-		args.read()
-		return False, True
-	
-	return False, False
-	
 
 def generate_request_from_args(args: Tape[str], working_path: Path):
 	found_src_folder: bool = False
@@ -216,10 +231,11 @@ def generate_request_from_args(args: Tape[str], working_path: Path):
 	src_folder: Path = Path()
 	output_folder: Path = Path()
 	
-	ignored_src_files_regex: set[re.Pattern] = set()
+	blacklist_files_regex: set[re.Pattern] = set()
 	actions: list[Action] = list[Action]()
 	custom_path_defines: dict[str, str] = dict[str, str]()
 	include_file_types: set[str] = set[str]()
+	inverted_blacklist: bool = False
 	
 	override_include_folder: bool = True
 	strict: bool = False
@@ -233,69 +249,79 @@ def generate_request_from_args(args: Tape[str], working_path: Path):
 			
 			if t == "keep-inc" or t == "keep-includes":
 				override_include_folder = False
-			
+			continue
+		
+		match t:
 		# strict
-		elif t == '/S':
-			strict = True
+			case '/S':
+				strict = True
 		# live
-		elif t == '/l':
-			live = True
-		elif t == 'copy':
-			pipe = PathPipe((read_path(), read_path()))
-			overwrite, silent = _parse_action_switchs(args)
+			case '/l':
+				live = True
+			case 'copy':
+				pipe = PathPipe((read_path(), read_path()))
+				overwrite, silent = _parse_action_switchs(args)
 				
-			actions.append(
-				Action(ActionType.Copy if overwrite else ActionType.Copy, pipe, silent)
-			)
-		
-		elif t == 'move':
-			pipe = PathPipe((read_path(), read_path()))
-			overwrite, silent = _parse_action_switchs(args)
+				actions.append(
+					Action(ActionType.Copy if overwrite else ActionType.Copy, pipe, silent)
+				)
+			
+			case 'move':
+				pipe = PathPipe((read_path(), read_path()))
+				overwrite, silent = _parse_action_switchs(args)
 				
-			actions.append(
-				Action(ActionType.Move if overwrite else ActionType.MoveNoOverwrite, pipe, silent)
-			)
-		
-		elif t == 'rename':
-			pipe = PathPipe((read_path(), read_path()))
-			overwrite, silent = _parse_action_switchs(args)
+				actions.append(
+					Action(ActionType.Move if overwrite else ActionType.MoveNoOverwrite, pipe, silent)
+				)
 			
-			actions.append(
-				Action(ActionType.RenameOverwrite if overwrite else ActionType.Rename, pipe, silent)
-			)
-		
-		elif t == 'delete' or t == 'del':
-			pipe = PathPipe((read_path(), None))
+			case 'rename':
+				pipe = PathPipe((read_path(), read_path()))
+				overwrite, silent = _parse_action_switchs(args)
+				
+				actions.append(
+					Action(ActionType.RenameOverwrite if overwrite else ActionType.Rename, pipe, silent)
+				)
 			
-			# Currently has no effects
-			overwrite, silent = _parse_action_switchs(args)
+			case 'delete' | 'del':
+				pipe = PathPipe((read_path(), None))
+				
+				# Currently has no effects
+				overwrite, silent = _parse_action_switchs(args)
+				
+				actions.append(
+					Action(ActionType.Delete, pipe, silent)
+				)
 			
-			actions.append(
-				Action(ActionType.Delete, pipe, silent)
-			)
-		
-		elif t == 'ignore':
-			ignored_src_files_regex.add(re.compile(args.read()))
-		
-		elif t == 'project':
-			project_path = read_path()
-		
-		elif t == 'source':
-			src_folder = read_path()
-			found_src_folder = True
-		
-		elif t == 'output':
-			output_folder = read_path()
-			found_out_folder = True
-		
-		elif t == 'include_file_type':
-			include_file_types.add(args.read())
-		
-		elif t == 'include_default':
-			include_file_types += set(get_include_file_types_default(args.read()))
-		
-		elif len(t) > 7 and t[:7] == 'define:':
-			custom_path_defines[t[7:]] = str(read_path())
+			case 'ignore':
+				print("[DEPRICATION] use 'blacklist' instad of 'ignore'")
+				blacklist_files_regex.add(re.compile(args.read()))
+			
+			case 'blacklist':
+				blacklist_files_regex.add(re.compile(args.read()))
+			
+			case 'invert_blacklist':
+				inverted_blacklist = not inverted_blacklist
+			
+			case 'project':
+				project_path = read_path()
+			
+			case 'source':
+				src_folder = read_path()
+				found_src_folder = True
+			
+			case 'output':
+				output_folder = read_path()
+				found_out_folder = True
+			
+			case 'include_file_type':
+				include_file_types.add(args.read())
+			
+			case 'include_default':
+				include_file_types += set(get_include_file_types_default(args.read()))
+			case _:
+				if len(t) > 7 and t[:7] == 'define:':
+					custom_path_defines[t[7:]] = str(read_path())
+	
 	
 	if not found_src_folder:
 		raise ValueError("No 'source' folder path found: A required argument can't be found, refere to the docs!")
@@ -311,21 +337,14 @@ def generate_request_from_args(args: Tape[str], working_path: Path):
 		_project=project_path,
 		_source_folder=src_folder,
 		_output_folder=output_folder,
-		_ignored_source_files=ignored_src_files_regex,
+		_source_files_blacklist_regexes=blacklist_files_regex,
+		_inverted_blacklist=inverted_blacklist,
 		_actions=actions,
 		_strict=strict,
 		_include_file_types=include_file_types,
 		_override_include_folder=override_include_folder,
 		_custom_path_defines=custom_path_defines
 	)
-
-def _is_valid_file(p: str):
-	# noinspection PyBroadException
-	try:
-		p = Path(p).resolve()
-		return p.is_file()
-	except:...
-	return False
 
 def create_new_template_hivefile(filepath: str | Path, override: bool = False):
 	if isinstance(filepath, str):
@@ -413,7 +432,7 @@ def main():
 	if mode == RunMode.FileArgs:
 		while args:
 			file_path = Path(args.read()).resolve().absolute()
-			fargs = Tape(pipin_args(file_path))
+			fargs = Tape(parse_args_file(file_path))
 			try:
 				req = generate_request_from_args(fargs, file_path.parent)
 			except:
