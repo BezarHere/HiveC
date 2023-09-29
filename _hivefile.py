@@ -15,6 +15,7 @@ StrProcessor = Callable[[str], str]
 _run_define: Union[Callable, None] = None
 
 _path_split_re = re.compile(r'[\\/]')
+_verbose: bool = True
 
 class ActionType(enum.IntEnum):
 	Copy = 0
@@ -79,6 +80,7 @@ class Action:
 			# Copy/CopyNoOverwrite
 			case ActionType.Copy | ActionType.CopyNoOverwrite:
 				from_path, to_path = _unravel_pipe(self.data, path_processor)
+				overwritten_file: bool = to_path.exists()
 				
 				if not from_path.exists():
 					if self.quite:
@@ -94,10 +96,12 @@ class Action:
 					return
 				
 				shutil.copy(from_path, to_path)
+				print(f"copied '{from_path}' --> '{to_path}'{ ' (overwriten)' if overwritten_file else '' }")
 				
 			# Move/MoveNoOverwrite
 			case ActionType.Move | ActionType.MoveNoOverwrite:
 				from_path, to_path = _unravel_pipe(self.data, path_processor)
+				overwritten_file: bool = to_path.exists()
 				
 				if not from_path.exists():
 					if self.quite:
@@ -113,6 +117,7 @@ class Action:
 					return
 				
 				shutil.move(from_path, to_path)
+				print(f"moved '{from_path}' --> '{to_path}'{' (overwriten)' if overwritten_file else ''}")
 				
 			# Delete
 			case ActionType.Delete:
@@ -126,6 +131,7 @@ class Action:
 					shutil.rmtree(target_path)
 				else:
 					os.remove(target_path)
+				print(f"deleted '{target_path}'")
 				
 			# Rename/RenameOverwrite
 			case ActionType.Rename | ActionType.RenameOverwrite:
@@ -139,6 +145,7 @@ class Action:
 				
 
 				new_name = Path(str(from_path.parent.absolute()) + '\\' + str(to_path))
+				overwritten_file: bool = new_name.exists()
 				
 				if self.action_type == ActionType.Rename and new_name.exists():
 					if self.quite:
@@ -147,6 +154,8 @@ class Action:
 				
 				# FIXME: Is there a better way?
 				shutil.move(from_path, new_name)
+				
+				print(f"renamed '{from_path}' --> '{to_path}'{' (overwriten)' if overwritten_file else ''}")
 				
 			# DEFAULT
 			case _:
@@ -259,18 +268,21 @@ def command_line_path():
 def _process_sources(rq: Request):
 	src_path = rq.source_folder
 	include_path = rq.include_folder
-	filetype_re = rq.get_include_file_regex()
 	
 	if not src_path.exists():
 		raise ValueError(f"src path is DOESN'T exsit: '{src_path}'")
 	if not src_path.is_dir():
 		raise ValueError(f"src path is NOT a directory: '{src_path}'")
 	
+	print(f"deploying project '{rq.project_path}'")
+	
 	if rq.wipe_include_destination_on_build:
 		if include_path.exists():
 			shutil.rmtree(include_path)
+			if _verbose:
+				print(f"cleared include path '{include_path}'")
 		os.makedirs(include_path, exist_ok=True)
-	elif not include_path.is_dir():
+	elif not include_path.is_dir() or not include_path.exists():
 		if rq.is_strict:
 			raise ValueError(f"[STRICT] invalid include path '{include_path}'")
 		os.makedirs(include_path, exist_ok=True)
@@ -284,8 +296,11 @@ def _process_sources(rq: Request):
 			continue
 		os.makedirs(ppath.parent, exist_ok=True)
 		
-		# FIXME: wtf? does it even work?
-		shutil.copy(ppath,  Path(str(ppath.absolute()).replace(str(src_path.absolute()), str(include_path.absolute()) + '\\')).resolve())
+		ppath_target = Path(str(ppath.absolute()).replace(str(src_path.absolute()), str(include_path.absolute()) + '\\')).resolve()
+		shutil.copy(ppath, ppath_target)
+		
+		if _verbose:
+			print(f"deployed header '{ppath}'\t-->\t'{ppath_target}'")
 
 def _run(req: Request):
 	try:

@@ -12,13 +12,17 @@ from pathlib import Path
 from _hivefile import Request, Action, ActionType, PathPipe
 
 async_mode: bool = False
-files_mode: bool = False
+
+_verbose: bool = False
 
 class RunMode(enum.IntEnum):
 	NoMode = 0
 	FileArgs = 1
 	CommandLineArgs = 2
 	
+	@property
+	def name(self):
+		return ('no mode', 'args file mode', 'command line args mode')[int(self)]
 
 def print_general_help():
 	level: int = 1
@@ -326,14 +330,17 @@ def _is_valid_file(p: str):
 def create_new_template_hivefile(filepath: str | Path, override: bool = False):
 	if isinstance(filepath, str):
 		filepath = Path(filepath)
-	filepath = filepath.resolve()
+	filepath = filepath.resolve().absolute()
+	if filepath.is_dir():
+		filepath = filepath.joinpath('hivec.args')
+	
 	if filepath.exists():
 		if not override:
 			return f"Can't create a new hivefile, path '{filepath}' already exists"
 	
 	with open(filepath, 'w') as f:
 		f.writelines(
-			(
+			i + '\n' for i in (
 				'# project path, or \'..\' to make it the current dir the file resides in',
 				'project ".."',
 				'',
@@ -352,14 +359,13 @@ def create_new_template_hivefile(filepath: str | Path, override: bool = False):
 				'',
 			)
 		)
-	print("Created a new hivec deploy project file!")
+	print(f"Created a new hivec deploy project file at '{filepath}'")
 	return None
 
 def main():
-	global files_mode, async_mode
+	global async_mode
 	live = False
 	
-	mode: RunMode = RunMode.NoMode
 	args: Tape[str] = Tape(sys.argv[1:])
 	
 	if len(args) == 0 or args.peek() == '-h' or args.peek() == '--help' or args.peek() == '?':
@@ -376,8 +382,8 @@ def main():
 	else:
 		args.read()
 		match first_command:
-			case '/f':
-				mode = RunMode.FileArgs
+			# case '/f':
+			# 	mode = RunMode.FileArgs
 			case '/c':
 				mode = RunMode.CommandLineArgs
 			case 'new':
@@ -396,27 +402,29 @@ def main():
 				err = create_new_template_hivefile(p, args and (args.peek() == '/overwrite' or args.peek() == '/o'))
 				if err is not None:
 					print(err)
-				
-		
-	
-	if first_command == '/f' or (valid_first_command_path := _is_valid_file(first_command)):
-		if not valid_first_command_path:
-			args.read()
-		files_mode = True
-	elif first_command == '/c':
-		args.read()
-	elif first_command == '/l':
-		args.read()
-		live = True
-	
+			case _:
+				mode = RunMode.FileArgs
 	
 	requests: list[Request] = []
 	
+	if mode != RunMode.NoMode:
+		print("Actvaiting:", mode.name)
+	
 	if mode == RunMode.FileArgs:
 		while args:
-			file_path = Path(args.read()).resolve()
-			args = Tape(pipin_args(file_path))
-			req = generate_request_from_args(args, file_path.parent)
+			file_path = Path(args.read()).resolve().absolute()
+			fargs = Tape(pipin_args(file_path))
+			try:
+				req = generate_request_from_args(fargs, file_path.parent)
+			except:
+				print(f"ARGS FILE '{file_path}' DUMP:")
+				if not file_path.exists() or not file_path.is_file():
+					print("  NO FILE EXISTS DO DUMP")
+				else:
+					print('  ' + file_path.read_text('utf-8').replace('\n', '\n  '))
+				print("\nARGS PARSED:")
+				print(fargs.data)
+				raise
 			requests.append(req)
 			req.run()
 	elif mode == RunMode.CommandLineArgs:
