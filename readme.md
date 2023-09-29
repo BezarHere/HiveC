@@ -4,6 +4,7 @@
 A compacted library of variouse tools, useful (at least for me)
 
 ### HOW to use
+---
 
 ### | from the command line you use `py -m hivecpp [, /f, /c] <your arguments>`
 
@@ -52,9 +53,23 @@ include_file_type "bat"
 ```
 
 ### i want the second method, to pass all arguments into the command line!
-**Firstly**: thats why? it's much cleaner in an args file
+**Firstly**: just why? it's much cleaner to use a hive args file
 
-**Secondly**: Alrigh, you can pass arguments to the command line, just remove the comments and replace every new line with a space to make the entire file as *one* line
+**Secondly**: Alrigh, you can pass arguments to the command line, just remove the comments and replace every new line with a space to make the entire file as *one* line (you might need to add `/c` as the first argument)
 
 ## Why not CMake?
-hivecpp is some much smaller and easier, given you have (wich most of you have) python installed
+hivecpp is smaller and easier, given you have (wich most of you have) python installed
+
+# FAQs
+
+### Why can't this be a standalone executable?
+becuse a value a transparent script that hides nothing, **but** if you wanted a standalone executable, just make it, there is a lot of tools that can convert a python script(s) to a standalone executable *and don't violate my copyright/licence*
+
+### Where there be support for more languages?
+Hopefuly, [contact me](https:\\tweeter.org\BotatoDev) if you want to contribute something
+
+open source doesn't mean open to *all* contributions, any random merge requests will not be accepted.
+
+---
+
+*god bless*
