@@ -86,6 +86,13 @@ def print_general_help():
 	print()
 	
 	level -= 1
+	show("include_dir <dir path>")
+	level += 1
+	show("Overwrites the include directory from \"__out__\\include\" to the path given")
+	
+	print()
+	
+	level -= 1
 	show("copy <src path> <dst path> [, /o, /overwrite] [, /s, /silent]")
 	level += 1
 	show("A copy command from the src path to the dst path.")
@@ -122,10 +129,19 @@ def print_general_help():
 	print()
 	
 	level -= 1
-	show("blacklist <header file>")
+	show("blacklist <header file> [, <flags>]")
 	level += 1
 	show("puts the header into the blacklist, if inverted; the blacklisted header will be whitelisted.")
 	show("Note: this uses REGEX and all the list is tested against the filepath.")
+	show("FLAGS:")
+	level += 1
+	show("/s, /ignorecase        -> Ignore case")
+	show("/S, /-ignorecase, /-s  -> case-sensitive")
+	show("/d, /dotall            -> the '.' matchs newlines")
+	show("/D, /-dotall, /-d      -> the '.' never matchs a newline")
+	show("/m, /multiline         -> '$' and '^' anchors anchor to newlines")
+	show("/M, /-multiline, /-m   ->  '$' and '^' anchors only anchor to end/start of the pattren")
+	level -= 1
 	
 	print()
 	
@@ -217,6 +233,29 @@ def get_include_file_types_default(for_lang: str):
 			return 'h', 'hpp', 'hxx', 'inl'
 	return tuple()
 
+def parse_blacklist_regex(t: Tape[str]):
+	base = t.read()
+	flags: re.RegexFlag = re.UNICODE
+	while t:
+		match t.peek():
+			case '/s' | '/ignorecase':
+				flags |= re.IGNORECASE
+			case '/S' | '/-ignorecase' | '/-s':
+				flags |= ~re.IGNORECASE
+			case '/d' | '/dotall':
+				flags |= re.DOTALL
+			case '/D' | '/-dotall' | '/-d':
+				flags |= ~re.DOTALL
+			case '/m' | '/multiline':
+				flags |= re.MULTILINE
+			case '/M' | '/-multiline' | '/-m':
+				flags |= ~re.MULTILINE
+			case _:
+				break
+		t.read()
+	return re.compile(base, flags)
+
+
 def generate_request_from_args(args: Tape[str], working_path: Path):
 	found_src_folder: bool = False
 	found_out_folder: bool = False
@@ -238,6 +277,7 @@ def generate_request_from_args(args: Tape[str], working_path: Path):
 	custom_path_defines: dict[str, str] = dict[str, str]()
 	include_file_types: set[str] = set[str]()
 	inverted_blacklist: bool = False
+	custom_include_dir: Path | None = None
 	
 	override_include_folder: bool = True
 	strict: bool = False
@@ -296,10 +336,10 @@ def generate_request_from_args(args: Tape[str], working_path: Path):
 			
 			case 'ignore':
 				print("[DEPRICATION] use 'blacklist' instad of 'ignore'")
-				blacklist_files_regex.add(re.compile(args.read()))
+				blacklist_files_regex.add(parse_blacklist_regex(args))
 			
 			case 'blacklist':
-				blacklist_files_regex.add(re.compile(args.read()))
+				blacklist_files_regex.add(parse_blacklist_regex(args))
 			
 			case 'invert_blacklist':
 				inverted_blacklist = not inverted_blacklist
@@ -314,6 +354,9 @@ def generate_request_from_args(args: Tape[str], working_path: Path):
 			case 'output':
 				output_folder = read_path()
 				found_out_folder = True
+			
+			case 'include_dir':
+				custom_include_dir = read_path()
 			
 			case 'include_file_type':
 				include_file_types.add(args.read())
@@ -347,7 +390,8 @@ def generate_request_from_args(args: Tape[str], working_path: Path):
 		_strict=strict,
 		_include_file_types=include_file_types,
 		_override_include_folder=override_include_folder,
-		_custom_path_defines=custom_path_defines
+		_custom_path_defines=custom_path_defines,
+		_custom_include_path=custom_include_dir
 	)
 
 def create_new_template_hivefile(filepath: str | Path, override: bool = False):

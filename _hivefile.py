@@ -188,6 +188,8 @@ class Request:
 	
 	_custom_path_defines: dict[str, str]
 	
+	_custom_include_path: Path | str | None = None
+	
 	def __hash__(self):
 		return hash((hash(self._project), hash(repr(self)), hash(self._source_folder), hash(self._output_folder)))
 	
@@ -205,7 +207,9 @@ class Request:
 	
 	@property
 	def include_folder(self):
-		return Path(self.process_path(str(self._output_folder) + '//include'))
+		if self._custom_include_path is None:
+			return Path((self.process_path(str(self._output_folder) + '//include')))
+		return Path(self.process_path(self._custom_include_path))
 	
 	@property
 	def lib_folder(self):
@@ -285,7 +289,10 @@ def _process_sources(rq: Request):
 	if not src_path.is_dir():
 		raise ValueError(f"src path is NOT a directory: '{src_path}'")
 	
-	print(f"deploying project '{rq.project_path}'")
+	print(f"started deploying project '{rq.project_path}'")
+	print(f"project included directory: '{rq.include_folder}'")
+	print(f"project source directory: '{rq.source_folder}'")
+	print(f"project output directory: '{rq.output_folder}'")
 	
 	if rq.wipe_include_destination_on_build:
 		if include_path.exists():
@@ -331,8 +338,7 @@ def _run(req: Request):
 			print(f"  with paths: '{i.data[0]}',\n"
 				  f"              '{i.data[1]}'")
 			print('\t' + repr(e).replace('\n', '\n\t'))
-				
-	
+			
 
 ## Importent!
 query_run_define()
