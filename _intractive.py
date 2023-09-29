@@ -323,6 +323,8 @@ def generate_request_from_args(args: Tape[str], working_path: Path):
 			case _:
 				if len(t) > 7 and t[:7] == 'define:':
 					custom_path_defines[t[7:]] = str(read_path())
+				else:
+					print(f"[Warning] Unknown argument: '{t}'")
 	
 	
 	if not found_src_folder:
