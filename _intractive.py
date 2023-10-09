@@ -1,6 +1,5 @@
-"""
-All rights (C) 2023 reserved for Zaher abdolatif abdorab babakr (Bezar/BotatoDev)
-"""
+# All rights (C) 2023 reserved for Zaher abdolatif abdorab babakr (Bezar/BotatoDev)
+"""loaded to process hivec when it's main is invoked"""
 import enum
 import glassy.utils
 import os
@@ -15,15 +14,23 @@ async_mode: bool = False
 
 _verbose: bool = False
 
+class PrettyStr(str):
+	
+	def __new__(cls, obj) -> str:
+		return obj.__pretty_str__()
+	
+
 class RunMode(enum.IntEnum):
 	NoMode = 0
 	FileArgs = 1
 	CommandLineArgs = 2
+	ReadoutFileArgs = 3
 	
 	@property
 	def name(self):
-		return ('no mode', 'args file mode', 'command line args mode')[int(self)]
+		return ('no mode', 'args file mode', 'command line args mode', 'readout args file')[int(self)]
 
+# FIXME: general help needs a revamp
 def print_general_help():
 	level: int = 1
 	show = lambda s: print('  ' * level, s)
@@ -47,7 +54,7 @@ def print_general_help():
 	print()
 	
 	level -= 1
-	show("/f <args file path>")
+	show("[, /f] <args file path>")
 	level += 1
 	show("Runs the argument file, Should be always the first argument.")
 	show("no more argument from the commandline will be read if this switch is present.")
@@ -55,10 +62,7 @@ def print_general_help():
 	
 	print()
 	
-	level -= 1
-	show("/s")
 	level += 1
-	show("Directs the input from the successiding commandline arguments")
 	
 	show("[REQUIRED] source <source path>")
 	level += 1
@@ -164,6 +168,11 @@ def print_general_help():
 	level += 1
 	show("Defines <name> with <value>, any instance of '__<name>__' in any path is replaced by '<value>'.")
 	show("For examble: --define:output __proj__\\win64")
+	
+	level -= 1
+	
+	
+	
 
 def print_help(subject: str):
 	if not subject:
@@ -453,6 +462,8 @@ def main():
 			# 	mode = RunMode.FileArgs
 			case '/c':
 				mode = RunMode.CommandLineArgs
+			case 'show':
+				mode = RunMode.ReadoutFileArgs
 			case 'new':
 				mode = RunMode.NoMode
 				p = os.getcwd()
@@ -477,7 +488,10 @@ def main():
 	if mode != RunMode.NoMode:
 		print("Actvaiting:", mode.name)
 	
-	if mode == RunMode.FileArgs:
+	if mode == RunMode.FileArgs or mode == RunMode.ReadoutFileArgs:
+		if not args:
+			args = Tape[str]([Path(os.getcwd()).resolve().absolute().joinpath('hivec.args')])
+		
 		while args:
 			file_path = Path(args.read()).resolve().absolute()
 			fargs = Tape(parse_args_file(file_path))
@@ -493,7 +507,10 @@ def main():
 				print(fargs.data)
 				raise
 			requests.append(req)
-			req.run()
+			if mode == RunMode.ReadoutFileArgs:
+				print(PrettyStr(req))
+			else:
+				req.run()
 	elif mode == RunMode.CommandLineArgs:
 		req = generate_request_from_args(args, Path(os.getcwd()))
 		req.run()

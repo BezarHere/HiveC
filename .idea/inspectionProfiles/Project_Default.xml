@@ -32,6 +32,13 @@
     <inspection_tool class="PyProtectedMemberInspection" enabled="true" level="WARNING" enabled_by_default="true" editorAttributes="WARNING_ATTRIBUTES">
       <option name="ignoreTestFunctions" value="false" />
     </inspection_tool>
+    <inspection_tool class="PyShadowingBuiltinsInspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredNames">
+        <list>
+          <option value="help" />
+        </list>
+      </option>
+    </inspection_tool>
     <inspection_tool class="PyStatementEffectInspection" enabled="true" level="WEAK WARNING" enabled_by_default="true" editorAttributes="NOT_USED_ELEMENT_ATTRIBUTES" />
     <inspection_tool class="SpellCheckingInspection" enabled="false" level="TYPO" enabled_by_default="false">
       <option name="processCode" value="true" />
