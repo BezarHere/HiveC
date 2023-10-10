@@ -9,6 +9,7 @@ from glassy.utils import Tape
 from pathlib import Path
 
 from _hivefile import Action, Request, PathPipe, ActionType
+from docs import gen_help
 
 async_mode: bool = False
 
@@ -30,153 +31,10 @@ class RunMode(enum.IntEnum):
 	def name(self):
 		return ('no mode', 'args file mode', 'command line args mode', 'readout args file')[int(self)]
 
-# FIXME: general help needs a revamp
-def print_general_help():
-	level: int = 1
-	show = lambda s: print('  ' * level, s)
-	
-	# presentation:
-	print('#' * 64)
-	print("\tHiveCPP")
-	print("\tMade by Bezar")
-	print("\tAll rights (C) 2023 reserved for Zaher abdolatif abdorab babakr (Bezar/BotatoDev)")
-	print('#' * 64)
-	
-	print("Summary:")
-	print("\tLib deploy is a simple script to help deploy script using command-line arguments passed to the script")
-	print("\tYou can custmize the deploying process in many ways to be the best for your coding enviorment!")
-	print("")
-	print("\tFor Any suggesting, make an issue on githup (githup.com\BezarHere)")
-	print()
-	
-	print("Usages:")
-	
-	print()
-	
-	level -= 1
-	show("[, /f] <args file path>")
-	level += 1
-	show("Runs the argument file, Should be always the first argument.")
-	show("no more argument from the commandline will be read if this switch is present.")
-	show("[DEFAULT] if the first argument is a valid hive arguments file")
-	
-	print()
-	
-	level += 1
-	
-	show("[REQUIRED] source <source path>")
-	level += 1
-	show("Where is the source code (headers)?")
-	show("The folder where all the headers will be loaded.")
-	show("The source path replaces every '__src__' in other paths.")
-	
-	print()
-	
-	level -= 1
-	show("[REQUIRED] output <output path>")
-	level += 1
-	show("Where will build lib be at?")
-	show("The folder where all the headers (\\include), libraries (\\lib) and binaries (\\bin) will be deployied.")
-	show("The include path replaces every '__out__' in other paths.")
-	
-	print()
-	
-	level -= 1
-	show("[REQUIRED] project <project path>")
-	level += 1
-	show("Where is the project?")
-	show("The project path replaces every '__proj__' in other paths.")
-	
-	print()
-	
-	level -= 1
-	show("include_dir <dir path>")
-	level += 1
-	show("Overwrites the include directory from \"__out__\\include\" to the path given")
-	
-	print()
-	
-	level -= 1
-	show("copy <src path> <dst path> [, /o, /overwrite] [, /s, /silent]")
-	level += 1
-	show("A copy command from the src path to the dst path.")
-	show("the switch '/o' or '/overwrite' makes the copy overwrite the destination")
-	show("the switch '/s' or '/silent' makes the copy silently handle some errors (e.g. when the source doesn't exist)")
-	
-	print()
-	
-	level -= 1
-	show("move <src path> <dst path> [, /o, /overwrite] [, /s, /silent]")
-	level += 1
-	show("A move command from the src path to the dst path.")
-	show("the switch '/o' or '/overwrite' makes the move overwrite the destination")
-	show("the switch '/s' or '/silent' makes the move silently handle some errors (e.g. when the source doesn't exist)")
-	
-	print()
-	
-	level -= 1
-	show("rename <src path> <new_name> [, /o, /overwrite] [, /s, /silent]")
-	level += 1
-	show("A rename command renames the src files/folder to new_name.")
-	show("the switch '/o' or '/overwrite' makes the rename overwrite any other files with the new name")
-	show("the switch '/s' or '/silent' makes the rename silently handle some errors (e.g. when the source doesn't exist or if there is a name collision without the overwrite switch)")
-	
-	print()
-	
-	level -= 1
-	show("delete <target path> [, /o, /overwrite] [, /s, /silent]")
-	level += 1
-	show("A rename command renames the src files/folder to new_name.")
-	show("the switch '/o' or '/overwrite' has no effects in delete actions")
-	show("the switch '/s' or '/silent' makes the delete silently handle some errors (currently it has no effects)")
-	
-	print()
-	
-	level -= 1
-	show("blacklist <header file> [, <flags>]")
-	level += 1
-	show("puts the header into the blacklist, if inverted; the blacklisted header will be whitelisted.")
-	show("Note: this uses REGEX and all the list is tested against the filepath.")
-	show("FLAGS:")
-	level += 1
-	show("/s, /ignorecase        -> Ignore case")
-	show("/S, /-ignorecase, /-s  -> case-sensitive")
-	show("/d, /dotall            -> the '.' matchs newlines")
-	show("/D, /-dotall, /-d      -> the '.' never matchs a newline")
-	show("/m, /multiline         -> '$' and '^' anchors anchor to newlines")
-	show("/M, /-multiline, /-m   ->  '$' and '^' anchors only anchor to end/start of the pattren")
-	level -= 1
-	
-	print()
-	
-	level -= 1
-	show("invert_blacklist")
-	level += 1
-	show("inverts the blacklist to a whitelist.")
-	
-	print()
-	
-	level -= 1
-	show("include_file_type <file extension (without the '.')>")
-	level += 1
-	show("Treats all file of this extension like headers.")
-	
-	print()
-	
-	level -= 1
-	show("define:<name> <value>")
-	level += 1
-	show("Defines <name> with <value>, any instance of '__<name>__' in any path is replaced by '<value>'.")
-	show("For examble: --define:output __proj__\\win64")
-	
-	level -= 1
-	
-	
-	
 
 def print_help(subject: str):
 	if not subject:
-		print_general_help()
+		print(gen_help())
 		return
 
 
@@ -348,6 +206,11 @@ def generate_request_from_args(args: Tape[str], working_path: Path):
 				blacklist_files_regex.add(parse_blacklist_regex(args))
 			
 			case 'blacklist':
+				inverted_blacklist = False
+				blacklist_files_regex.add(parse_blacklist_regex(args))
+			
+			case 'whitelist':
+				inverted_blacklist = True
 				blacklist_files_regex.add(parse_blacklist_regex(args))
 			
 			case 'invert_blacklist':
@@ -430,8 +293,8 @@ def create_new_template_hivefile(filepath: str | Path, override: bool = False):
 				'',
 				'# headers with their path matching the given REGEX EXP (note that it does not use glob) are ignored.',
 				'# just "pch.h" will ignore every file named "pch.h" or has "pch.h" in it\'s filepath',
-				'ignore pch.h',
-				'ignore internal.h',
+				'blacklist pch.h',
+				'blacklist internal.h',
 				'',
 			)
 		)
@@ -445,7 +308,7 @@ def main():
 	args: Tape[str] = Tape(sys.argv[1:])
 	
 	if len(args) == 0 or args.peek() == '-h' or args.peek() == '--help' or args.peek() == '?':
-		print_general_help()
+		print(gen_help())
 		input("\nPress anykey to exit...")
 		return
 	

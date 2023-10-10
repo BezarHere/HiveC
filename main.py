@@ -9,6 +9,7 @@ All rights (C) 2023 reserved for Zaher abdolatif abdorab babakr (Bezar/BotatoDev
 
 
 if __name__ == '__main__':
+	import docs
 	from _intractive import main
 	main()
 else:
