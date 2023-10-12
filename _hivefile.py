@@ -1,5 +1,5 @@
 """
-All rights (C) 2023 reserved for Zaher abdolatif abdorab babakr (Bezar/BotatoDev)
+All rights (C) 2023 reserved for Zahr abdolatif abdorab babakr (Bezar/BotatoDev)
 """
 import enum
 import io

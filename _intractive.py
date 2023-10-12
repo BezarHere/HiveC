@@ -1,4 +1,4 @@
-# All rights (C) 2023 reserved for Zaher abdolatif abdorab babakr (Bezar/BotatoDev)
+# All rights (C) 2023 reserved for Zahr abdolatif abdorab babakr (Bezar/BotatoDev)
 """loaded to process hivec when it's main is invoked"""
 import enum
 import glassy.utils

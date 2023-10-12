@@ -1,3 +1,4 @@
+# All rights (C) 2023 reserved for Zahr abdolatif abdorab babakr (Bezar/BotatoDev)
 import io
 
 
@@ -164,7 +165,7 @@ def _get_summary():
 	s.write('#' * 64 + '\n')
 	s.write("\tHiveC" + '\n')
 	s.write("\tMade by Bezar" + '\n')
-	s.write("\tAll rights (C) 2023 reserved for Zaher abdolatif abdorab babakr (Bezar/BotatoDev)" + '\n')
+	s.write("\tAll rights (C) 2023 reserved for Zahr abd. babakr (Bezar/BotatoDev)" + '\n')
 	s.write('#' * 64 + '\n\n')
 	
 	s.write("Summary:" + '\n')
